@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🌿 SMART ECO-STATION // Freeboard IoT Realtime Dashboard</title>
+  <meta name="description"
+    content="Smart Eco & Weather Station ระบบตรวจวัดสภาพแวดล้อมและสภาพอากาศอัจฉริยะ 7 พารามิเตอร์ เชื่อมต่อ Firebase Realtime Database" />
+
+  <!-- Google Fonts: Prompt & Outfit & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Prompt:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet" />
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+
+  <!-- Dynamic Cyber-Eco Particle & Aurora Canvas Background -->
+  <canvas id="ecoCanvas"></canvas>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Main Container -->
+  <div class="app-container">
+
+    <!-- 1. Header Bar -->
+    <header class="main-header glass-panel">
+      <div class="brand-wrapper">
+        <div class="brand-icon-wrap">🌱</div>
+        <div class="brand-info">
+          <h1>SMART ECO &amp; WEATHER STATION</h1>
+          <p>สถานีตรวจวัดสภาพแวดล้อมและสภาพอากาศ 7 พารามิเตอร์ • <span
+              style="font-family: var(--font-mono); color: var(--neon-cyan); font-weight: 700;">/freeboard</span> •
+            โหนด: <span id="currentDeviceLabel"
+              style="font-family: var(--font-mono); color: #38bdf8;">esp32-eco-station</span></p>
+        </div>
+      </div>
+
+      <div class="header-status-group">
+        <div class="status-pill" id="connectionStatusPill">
+          <span class="status-dot"></span>
+          <span id="connectionStatusText">กำลังเชื่อมต่อ Firebase...</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn btn-primary" id="btnToggleSim" title="ทดสอบจำลองส่งข้อมูลโดยไม่ต้องต่อบอร์ดจริง">
+          <span>🎲 ทดสอบข้อมูลจำลอง</span>
+        </button>
+        <button class="btn icon-btn" id="btnCanvasFx" title="เปิด/ปิด แอนิเมชันพื้นหลัง (Particle FX)">
+          <span>🌌</span>
+        </button>
+        <button class="btn icon-btn" id="btnRefresh" title="รีเฟรชข้อมูล">
+          <span>🔄</span>
+        </button>
+        <button class="btn icon-btn" id="btnSound" title="เปิด/ปิดเสียงเอฟเฟกต์">
+          <span>🔊</span>
+        </button>
+        <button class="btn icon-btn" id="btnTheme" title="เปลี่ยนธีม มืด/สว่าง">
+          <span>🌙</span>
+        </button>
+        <button class="btn icon-btn" id="btnSettings" title="ตั้งค่า Firebase Database URL">
+          <span>⚙️</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 2. System Architecture Pipeline (ตามโจทย์อาจารย์) -->
+    <section class="architecture-card glass-panel">
+      <div class="arch-header">
+        <div class="arch-title">
+          <span>📐 โครงสร้างระบบการทำงาน (System Architecture)</span>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-dim);">
+          อัปเดตล่าสุด: <span id="lastUpdateText" style="color: var(--accent-cyan); font-weight: 500;">-</span>
+        </div>
+      </div>
+
+      <div class="arch-pipeline">
+        <!-- Step 1: ESP32 / ESPHome -->
+        <div class="pipe-step">
+          <div class="pipe-header">
+            <span class="pipe-icon">📟</span>
+            <span class="pipe-tag">Hardware / Firmware</span>
+          </div>
+          <div class="pipe-name">ESP32 &amp; ESPHome</div>
+          <div class="pipe-desc">สุ่มค่าเซนเซอร์จำลอง (Template Sensor) ส่งออกผ่าน HTTP REST API ทุก 10s</div>
+        </div>
+
+        <!-- Step 2: Firebase RTDB /latest -->
+        <div class="pipe-step">
+          <div class="pipe-header">
+            <span class="pipe-icon">⚡</span>
+            <span class="pipe-tag">PUT /latest.json</span>
+          </div>
+          <div class="pipe-name">Firebase: latest</div>
+          <div class="pipe-desc">บันทึกทับค่าปัจจุบันแบบ Realtime ทันทีที่เซนเซอร์ส่งข้อมูล</div>
+        </div>
+
+        <!-- Step 3: Firebase RTDB /history -->
+        <div class="pipe-step">
+          <div class="pipe-header">
+            <span class="pipe-icon">🗄️</span>
+            <span class="pipe-tag">POST /history.json</span>
+          </div>
+          <div class="pipe-name">Firebase: history</div>
+          <div class="pipe-desc">เพิ่มประวัติข้อมูลตามลำดับเวลา (Time-series Log) สำหรับกราฟและตาราง</div>
+        </div>
+
+        <!-- Step 4: GitHub Pages /freeboard -->
+        <div class="pipe-step">
+          <div class="pipe-header">
+            <span class="pipe-icon">🌐</span>
+            <span class="pipe-tag">GitHub Pages (/freeboard)</span>
+          </div>
+          <div class="pipe-name">Web Dashboard (Freeboard)</div>
+          <div class="pipe-desc">ดึงและ Sync ข้อมูลแบบ Realtime ผ่าน EventSource / REST API</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Metric Cards Grid (เซนเซอร์แบบจำลองโดยการสุ่มค่า) -->
+    <section class="metrics-grid">
+      <!-- 3.1 Temperature -->
+      <div class="metric-card glass-panel card-temp">
+        <div class="card-top">
+          <div class="metric-label-group">
+            <span class="metric-title">อุณหภูมิ (Temperature)</span>
+            <span class="metric-badge" id="badgeTemp">กำลังวัด...</span>
+          </div>
+          <div class="metric-icon-wrap">🌡️</div>
+        </div>
+        <div class="card-main-val">
+          <span class="metric-num" id="valTemp">--.-</span>
+          <span class="metric-unit">°C</span>
+        </div>
+        <div class="metric-footer">
+          <div class="metric-bar-container">
+            <div class="metric-bar-fill" id="barTemp" style="width: 50%;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>ช่วงค่า: 15 - 45 °C</span>
+            <span style="color: var(--accent-rose);">ESPHome Random Sensor</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3.2 Humidity -->
+      <div class="metric-card glass-panel card-humidity">
+        <div class="card-top">
+          <div class="metric-label-group">
+            <span class="metric-title">ความชื้นสัมพัทธ์ (Humidity)</span>
+            <span class="metric-badge" id="badgeHum">กำลังวัด...</span>
+          </div>
+          <div class="metric-icon-wrap">💧</div>
+        </div>
+        <div class="card-main-val">
+          <span class="metric-num" id="valHum">--.-</span>
+          <span class="metric-unit">%</span>
+        </div>
+        <div class="metric-footer">
+          <div class="metric-bar-container">
+            <div class="metric-bar-fill" id="barHum" style="width: 60%;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>ช่วงค่า: 20 - 100 %</span>
+            <span style="color: var(--accent-cyan);">Relative Humidity</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3.3 Light Intensity -->
+      <div class="metric-card glass-panel card-light">
+        <div class="card-top">
+          <div class="metric-label-group">
+            <span class="metric-title">ความเข้มแสง (Light Lux)</span>
+            <span class="metric-badge" id="badgeLux">กำลังวัด...</span>
+          </div>
+          <div class="metric-icon-wrap">☀️</div>
+        </div>
+        <div class="card-main-val">
+          <span class="metric-num" id="valLux">---</span>
+          <span class="metric-unit">lx</span>
+        </div>
+        <div class="metric-footer">
+          <div class="metric-bar-container">
+            <div class="metric-bar-fill" id="barLux" style="width: 45%;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>จำลองเซนเซอร์: BH1750</span>
+            <span style="color: var(--accent-amber);">Ambient Lux</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3.4 Soil Moisture -->
+      <div class="metric-card glass-panel card-soil">
+        <div class="card-top">
+          <div class="metric-label-group">
+            <span class="metric-title">ความชื้นในดิน (Soil Moisture)</span>
+            <span class="metric-badge" id="badgeSoil">กำลังวัด...</span>
+          </div>
+          <div class="metric-icon-wrap">🌱</div>
+        </div>
+        <div class="card-main-val">
+          <span class="metric-num" id="valSoil">--.-</span>
+          <span class="metric-unit">%</span>
+        </div>
+        <div class="metric-footer">
+          <div class="metric-bar-container">
+            <div class="metric-bar-fill" id="barSoil" style="width: 55%;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>ระดับความชุ่มชื้นดิน</span>
+            <span style="color: var(--accent-emerald);">Analog Simulation</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3.5 Carbon Dioxide (CO2) -->
+      <div class="metric-card glass-panel card-co2">
+        <div class="card-top">
+          <div class="metric-label-group">
+            <span class="metric-title">คุณภาพอากาศ (CO2 Level)</span>
+            <span class="metric-badge" id="badgeCo2">กำลังวัด...</span>
+          </div>
+          <div class="metric-icon-wrap">☁️</div>
+        </div>
+        <div class="card-main-val">
+          <span class="metric-num" id="valCo2">---</span>
+          <span class="metric-unit">ppm</span>
+        </div>
+        <div class="metric-footer">
+          <div class="metric-bar-container">
+            <div class="metric-bar-fill" id="barCo2" style="width: 50%;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>เกณฑ์: 400 - 1200 ppm</span>
+            <span style="color: #a855f7;">MQ-135 / SCD40</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3.6 Atmospheric Pressure -->
+      <div class="metric-card glass-panel card-pressure">
+        <div class="card-top">
+          <div class="metric-label-group">
+            <span class="metric-title">ความกดอากาศ (Pressure)</span>
+            <span class="metric-badge" id="badgePressure">ปกติ</span>
+          </div>
+          <div class="metric-icon-wrap">🧭</div>
+        </div>
+        <div class="card-main-val">
+          <span class="metric-num" id="valPressure">----.-</span>
+          <span class="metric-unit">hPa</span>
+        </div>
+        <div class="metric-footer">
+          <div class="metric-bar-container">
+            <div class="metric-bar-fill" id="barPressure" style="width: 60%;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>ความกดอากาศมาตรฐาน</span>
+            <span style="color: #06b6d4;">BMP280 Sensor</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3.7 Battery Level -->
+      <div class="metric-card glass-panel card-battery">
+        <div class="card-top">
+          <div class="metric-label-group">
+            <span class="metric-title">ระดับแบตเตอรี่ (Battery)</span>
+            <span class="metric-badge" id="badgeBattery">ปกติ</span>
+          </div>
+          <div class="metric-icon-wrap">🔋</div>
+        </div>
+        <div class="card-main-val">
+          <span class="metric-num" id="valBattery">--</span>
+          <span class="metric-unit">%</span>
+        </div>
+        <div class="metric-footer">
+          <div class="metric-bar-container">
+            <div class="metric-bar-fill" id="barBattery" style="width: 85%;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>สถานะไฟสำรองระบบ</span>
+            <span style="color: #84cc16;">Battery Monitor</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Realtime Analytics & Insights -->
+    <section class="analytics-grid">
+      <!-- 4.1 Live Telemetry Chart -->
+      <div class="chart-card glass-panel">
+        <div class="card-header-flex">
+          <div class="card-header-title">
+            <span>📈 กราฟแสดงผลแบบเรียลไทม์ (Live Telemetry Stream)</span>
+          </div>
+          <div class="chart-controls">
+            <button class="chart-btn" data-points="10">10 จุด</button>
+            <button class="chart-btn active" data-points="20">20 จุด</button>
+            <button class="chart-btn" data-points="50">50 จุด</button>
+          </div>
+        </div>
+        <div class="chart-canvas-wrap">
+          <canvas id="telemetryCanvas"></canvas>
+        </div>
+      </div>
+
+      <!-- 4.2 System Insights & Telemetry Meta -->
+      <div class="insights-card glass-panel">
+        <div class="card-header-flex">
+          <div class="card-header-title">
+            <span>🧠 การวิเคราะห์ค่าสภาพแวดล้อม (Smart Insights)</span>
+          </div>
+        </div>
+
+        <div class="insights-list">
+          <div class="insight-item">
+            <div class="insight-left">
+              <span class="insight-icon">🔥</span>
+              <div class="insight-meta">
+                <h4>ดัชนีความร้อน (Heat Index)</h4>
+                <p>ระดับอุณหภูมิที่ร่างกายรู้สึกจริง</p>
+              </div>
+            </div>
+            <div class="insight-val" id="insightHeatIndex">--.- °C</div>
+          </div>
+
+          <div class="insight-item">
+            <div class="insight-left">
+              <span class="insight-icon">💧</span>
+              <div class="insight-meta">
+                <h4>จุดน้ำค้าง (Dew Point)</h4>
+                <p>อุณหภูมิที่ไอน้ำเริ่มกลั่นตัวเป็นหยดน้ำ</p>
+              </div>
+            </div>
+            <div class="insight-val" id="insightDewPoint">--.- °C</div>
+          </div>
+
+          <div class="insight-item">
+            <div class="insight-left">
+              <span class="insight-icon">📡</span>
+              <div class="insight-meta">
+                <h4>สัญญาณ Wi-Fi (RSSI)</h4>
+                <p>ความแรงของสัญญาณไร้สาย</p>
+              </div>
+            </div>
+            <div class="insight-val" id="insightRssi">-60 dBm</div>
+          </div>
+
+          <div class="insight-item">
+            <div class="insight-left">
+              <span class="insight-icon">🆔</span>
+              <div class="insight-meta">
+                <h4>ชื่ออุปกรณ์ (Device ID)</h4>
+                <p>รหัสบอร์ด ESP32 ประจำโหนด</p>
+              </div>
+            </div>
+            <div class="insight-val" style="font-size: 0.85rem;" id="insightDevice">esp32-eco-station</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. History Log Table (ดึงจาก Firebase RTDB /history) -->
+    <section class="table-card glass-panel">
+      <div class="card-header-flex">
+        <div class="card-header-title">
+          <span>📜 ประวัติการบันทึกข้อมูล (Firebase /history Logs)</span>
+        </div>
+        <div>
+          <button class="btn btn-primary" id="btnExportCsv">
+            <span>📥 ส่งออกไฟล์ CSV</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>วันที่ &amp; เวลา (Timestamp)</th>
+              <th>อุณหภูมิ (°C)</th>
+              <th>ความชื้น (%)</th>
+              <th>แสง (Lux)</th>
+              <th>ความชื้นดิน (%)</th>
+              <th>CO2 (ppm)</th>
+              <th>ความกดอากาศ (hPa)</th>
+              <th>แบตเตอรี่ (%)</th>
+              <th>สถานะ Firebase</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody">
+            <tr>
+              <td colspan="10" style="text-align: center; color: var(--text-dim); padding: 2rem;">
+                กำลังโหลดข้อมูลประวัติจาก Firebase...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <p>ระบบสถานีตรวจวัดสภาพแวดล้อมและสภาพอากาศอัจฉริยะ (Smart Eco &amp; Weather Station) 7 ค่า • ESP32 / ESPHome • Firebase RTDB</p>
+      <p>© 2026 Embedded Systems &amp; IoT Laboratory | จัดทำเพื่อการศึกษาและส่งงานรายวิชา</p>
+    </footer>
+
+  </div>
+
+  <!-- Settings Modal (ตั้งค่า Firebase RTDB URL) -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><span>⚙️</span> ตั้งค่าการเชื่อมต่อ Firebase RTDB</h3>
+        <button class="modal-close" id="btnCloseModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="inputFirebaseUrl">Firebase Realtime Database URL:</label>
+          <input type="text" id="inputFirebaseUrl" class="form-control"
+            value="https://iot101-2da1e-default-rtdb.asia-southeast1.firebasedatabase.app"
+            placeholder="https://iot101-2da1e-default-rtdb.asia-southeast1.firebasedatabase.app" />
+          <p class="form-help">
+            💡 นำ URL มาจาก Firebase Console &gt; Realtime Database (ไม่ต้องใส่เครื่องหมาย / ท้าย URL)<br>
+            ระบบจะบันทึกค่าลงใน <code>localStorage</code> ของเว็บเบราว์เซอร์อัตโนมัติ
+          </p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="btnCancelSettings">ยกเลิก</button>
+        <button class="btn btn-primary" id="btnSaveSettings">บันทึก &amp; เชื่อมต่อใหม่</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- External JS Application -->
+  <script src="app.js"></script>
+</body>
+
+</html>
